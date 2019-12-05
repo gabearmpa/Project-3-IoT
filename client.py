@@ -1,34 +1,8 @@
 import socket
+import time
+import threading
 
-IPaddr = input("what is your IP?")
-
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.connect(('10.17.106.76', 80))
-
-    while(True):
-        print("VALID COMMANDS:\n"
-              "LIST, QUERY #, ALLQUERY, SET #, SETALARM #, LOGSTART #, LOGSTOP #\n")
-        cmd = input("enter a command:")
-        if(cmd == "LIST"):
-            list()
-        elif(cmd.split(" ")[0] == "QUERY"):
-            query(cmd.split(" ")[1])
-        elif (cmd == "ALLQUERY"):
-            allQuery()
-        elif (cmd.split(" ")[0] == "SET"):
-            set(cmd.split(" ")[1])
-        elif (cmd.split(" ")[0] == "SETALARM"):
-            setAlarm(cmd.split(" ")[1])
-        elif (cmd.split(" ")[0] == "LOGSTART"):
-            logStart(cmd.split(" ")[1])
-        elif (cmd.split(" ")[0] == "LOGSTOP"):
-            logStop(cmd.split(" ")[1])
-        else:
-            print("INVALID COMAND\n")
-
-    s.send(b'GET /sensors HTTP/1.1\r\n\r\n')
-    reply = s.recv(1024)
-    print(reply)
+IPaddr = input("What is the IP of the server? ")
 
 
 def list():
@@ -47,13 +21,97 @@ def set(val):
     print("Setting", val)
 
 
-def setAlarm(val):
-    print("alarm", val)
+# Peter Code -----------------
+def alarmEmail():
+    print("Sending alarm email/text?")
+    #TODO: send alarm email
 
+def runAlarm(sensor, value, isGreater):
+    # Run the loop until the program closes
+    while(True):
+        # TODO: get value of sensor
+        sensorValue = 10
+        if(isGreater and sensorValue > value):
+            print("Alarm!", sensor)
+            alarmEmail()
+        elif(not isGreater and sensorValue < value):
+            print("Alarm!", sensor)
+            alarmEmail()
+        time.sleep(15)
 
+def setAlarm(sensor):
+    # Find what type of alarm the user wants
+    condition = input("Alarm when > (greater than) or < (less than) a value: ")
+    isGreater = False
+    if(condition == ">"):
+        isGreater = True
+    elif(condition != "<"):
+        print("Invalid condition, please enter < or >")
+        return
+    value = int(input("Enter the value: "))
+    
+    print("Starting alarm", sensor)
+    # This thread is a daemon thread so it will quit running when the other thread ends
+    alarmThread = threading.Thread(target=runAlarm, args=[sensor, value, isGreater], daemon = True)
+    alarmThread.start()
+
+# Global array to keep track of what logs are running
+runningLog = [False, False, False, False, False]
+
+# Logging thread that logs every 15 seconds
+def logging(val):
+    global runningLog
+    while(runningLog[val]):
+        print("Logging", val)
+        # TODO: get data from server
+        # TODO: append data to logging file
+        time.sleep(15)
+
+# Start a logging thread
 def logStart(val):
-    print("Started Log", val)
+    if(not runningLog[val]):
+        print("Started Log", val)
+        runningLog[val] = True
+        logThread = threading.Thread(target=logging, args=({val}), daemon = True)
+        logThread.start()
+    else:
+        print("Already logging", val)
 
-
+# Stop a logging thread
 def logStop(val):
-    print("Started Log", val)
+    print("Stopping Log", val)
+    runningLog[val] = False
+# End Peter Code --------------------
+    
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    #s.connect(('10.17.106.76', 80)) commented out for testing
+
+    while(True):
+        print("Sensors: 0 = proximity, 1 = humidity, 2 = temperature, 3 = touch, 4 = light")
+        print("Actuators: 0 = on board LED, 1 = external LED, 2 = buzzer")
+        print("VALID COMMANDS:\n"
+              "LIST, QUERY #, ALLQUERY, SET #, SETALARM #, LOGSTART #, LOGSTOP #\n")
+        cmd = input("Enter a command: ")
+        try:
+            if(cmd == "LIST"):
+                list()
+            elif(cmd.split(" ")[0] == "QUERY"):
+                query(cmd.split(" ")[1])
+            elif (cmd == "ALLQUERY"):
+                allQuery()
+            elif (cmd.split(" ")[0] == "SET"):
+                set(cmd.split(" ")[1])
+            elif (cmd.split(" ")[0] == "SETALARM"):
+                setAlarm(int(cmd.split(" ")[1]))
+            elif (cmd.split(" ")[0] == "LOGSTART"):
+                logStart(int(cmd.split(" ")[1]))
+            elif (cmd.split(" ")[0] == "LOGSTOP"):
+                logStop(int(cmd.split(" ")[1]))
+            else:
+                print("INVALID COMMAND\n")
+        except:
+            print("INVALID COMMAND\n")
+
+    s.send(b'GET /sensors HTTP/1.1\r\n\r\n')
+    reply = s.recv(1024)
+    print(reply)
