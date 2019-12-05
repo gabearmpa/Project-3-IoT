@@ -1,6 +1,7 @@
 import socket
 import time
 import threading
+import smtplib
 
 IPaddr = input("What is the IP of the server? ")
 
@@ -22,21 +23,29 @@ def set(val):
 
 
 # Peter Code -----------------
-def alarmEmail():
-    print("Sending alarm email/text?")
-    #TODO: send alarm email
+gmail_user = 'comp342gccf19@gmail.com'
+gmail_password = 'P@$$word1!'
+destination = "lowrancepd1@gcc.edu"
+
+def alarmEmail(sensor, sensorValue, value, isGreater):
+    print("Sending alarm email\n")
+    condition = "greater" if isGreater else "less"
+    msg = "From: Home Alarm System\r\nTo: User\r\nSubject: Alarm\r\n\r\nThe sensor " + str(sensor) + " has value " + str(sensorValue) + " which is " + condition + " than the trigger value of " + str(value) + "."
+    mailer = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+    mailer.ehlo()
+    mailer.login(gmail_user, gmail_password)
+    mailer.sendmail(gmail_user, destination, msg)
+    mailer.close()    
 
 def runAlarm(sensor, value, isGreater):
     # Run the loop until the program closes
     while(True):
         # TODO: get value of sensor
         sensorValue = 10
-        if(isGreater and sensorValue > value):
+        if((isGreater and sensorValue > value) or (not isGreater and sensorValue < value)):
             print("Alarm!", sensor)
-            alarmEmail()
-        elif(not isGreater and sensorValue < value):
-            print("Alarm!", sensor)
-            alarmEmail()
+            alarmEmail(sensor, sensorValue, value, isGreater)
+            return
         time.sleep(15)
 
 def setAlarm(sensor):
