@@ -2,6 +2,7 @@ import socket
 import time
 import threading
 import smtplib
+import os.path
 
 IPaddr = input("What is the IP of the server? ")
 
@@ -68,28 +69,33 @@ def setAlarm(sensor):
 runningLog = [False, False, False, False, False]
 
 # Logging thread that logs every 15 seconds
-def logging(val):
+def logging(sensor):
     global runningLog
-    while(runningLog[val]):
-        print("Logging", val)
+    while(runningLog[sensor]):
+        print("Logging", sensor)
+        if(not os.path.isfile("log.csv")):
+            with open("log.csv", "a") as logFile:
+                logFile.write("Sensor, Value\n")
+        data = 5
         # TODO: get data from server
-        # TODO: append data to logging file
+        with open("log.csv", "a") as logFile:
+            logFile.write(str(sensor) + ", " + str(data) + "\n")
         time.sleep(15)
 
 # Start a logging thread
-def logStart(val):
-    if(not runningLog[val]):
-        print("Started Log", val)
-        runningLog[val] = True
-        logThread = threading.Thread(target=logging, args=({val}), daemon = True)
+def logStart(sensor):
+    if(not runningLog[sensor]):
+        print("Started Log", sensor)
+        runningLog[sensor] = True
+        logThread = threading.Thread(target=logging, args=({sensor}), daemon = True)
         logThread.start()
     else:
-        print("Already logging", val)
+        print("Already logging", sensor)
 
 # Stop a logging thread
-def logStop(val):
-    print("Stopping Log", val)
-    runningLog[val] = False
+def logStop(sensor):
+    print("Stopping Log", sensor)
+    runningLog[sensor] = False
 # End Peter Code --------------------
     
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
