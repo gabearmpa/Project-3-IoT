@@ -3,27 +3,44 @@ import time
 import threading
 import smtplib
 import os.path
+import re
 
-IPaddr = input("What is the IP of the server? ")
+IP = input("What is the IP of the server? ")
 
 
 def list():
-    print("Listing")
+    print("Sensors: 0 = proximity, 1 = temperature, 2 = humidity")
+    print("Actuators: 0 LED, 1 = buzzer")
 
-
-def query(val):
-    print("Query", val)
-
+def query(val, text):
+    cmds = ["proximity","temperature","humidity"]
+    message = 'GET /sensors/' + str(cmds[val]) + '\r\n\r\n'
+    s.send(message.encode())
+    time.sleep(.1)
+    if(text):
+        print("The", str(cmds[val]), "value is ")
+    rec = re.findall('\d+', s.recv(1024).decode())[3]
+    return rec#.split('\n')[3]
 
 def allQuery():
-    print("Query All")
-
+    s.send(b'GET /sensors\r\n\r\n')
+    time.sleep(.1)
+    print(s.recv(1024).decode().split('\n')[3])
 
 def set(val):
     print("Setting", val)
+    #maybe have one for onboard lED
+    if(val == 0):
+        temp = "led/"
+        temp += input("LED commands: on, off, toggle, flash: ")
+    elif(val == 1):
+        temp = "buzz/"
+        temp += input("buzzer commands: single, beeps, off: ")
+    message = 'PUT /'+temp+'\r\n\r\n'
+    s.send(message.encode())
+    time.sleep(.1)
+    print(s.recv(1024).decode().split('\n')[3])
 
-
-# Peter Code -----------------
 gmail_user = 'comp342gccf19@gmail.com'
 gmail_password = 'P@$$word1!'
 destination = "lowrancepd1@gcc.edu"
@@ -41,8 +58,7 @@ def alarmEmail(sensor, sensorValue, value, isGreater):
 def runAlarm(sensor, value, isGreater):
     # Run the loop until the program closes
     while(True):
-        # TODO: get value of sensor
-        sensorValue = 10
+        sensorValue = int(query(sensor, False))
         if((isGreater and sensorValue > value) or (not isGreater and sensorValue < value)):
             print("Alarm!", sensor)
             alarmEmail(sensor, sensorValue, value, isGreater)
@@ -60,7 +76,7 @@ def setAlarm(sensor):
         return
     value = int(input("Enter the value: "))
     
-    print("Starting alarm", sensor)
+    print("Starting alarm for when sensor " + str(sensor) + " has value  " + condition + " " + str(value))
     # This thread is a daemon thread so it will quit running when the other thread ends
     alarmThread = threading.Thread(target=runAlarm, args=[sensor, value, isGreater], daemon = True)
     alarmThread.start()
@@ -72,12 +88,11 @@ runningLog = [False, False, False, False, False]
 def logging(sensor):
     global runningLog
     while(runningLog[sensor]):
-        print("Logging", sensor)
+        #print("Logging", sensor)
         if(not os.path.isfile("log.csv")):
             with open("log.csv", "a") as logFile:
                 logFile.write("Sensor, Value\n")
-        data = 5
-        # TODO: get data from server
+        data = query(sensor, False)
         with open("log.csv", "a") as logFile:
             logFile.write(str(sensor) + ", " + str(data) + "\n")
         time.sleep(15)
@@ -96,26 +111,30 @@ def logStart(sensor):
 def logStop(sensor):
     print("Stopping Log", sensor)
     runningLog[sensor] = False
-# End Peter Code --------------------
     
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    #s.connect(('10.17.106.76', 80)) commented out for testing
-
+    s.connect((IP, 80))
+    firstTime = True
     while(True):
-        print("Sensors: 0 = proximity, 1 = humidity, 2 = temperature, 3 = touch, 4 = light")
-        print("Actuators: 0 = on board LED, 1 = external LED, 2 = buzzer")
-        print("VALID COMMANDS:\n"
+        print("\nVALID COMMANDS:\n"
               "LIST, QUERY #, ALLQUERY, SET #, SETALARM #, LOGSTART #, LOGSTOP #\n")
-        cmd = input("Enter a command: ")
+        cmd = input("Enter a command: ").upper()
         try:
             if(cmd == "LIST"):
                 list()
             elif(cmd.split(" ")[0] == "QUERY"):
-                query(cmd.split(" ")[1])
+                print(query(int(cmd.split(" ")[1]), True))
             elif (cmd == "ALLQUERY"):
                 allQuery()
-            elif (cmd.split(" ")[0] == "SET"):
-                set(cmd.split(" ")[1])
+            elif (cmd.split(" ")[0] == "SET" and firstTime):
+                password = input("First Time setting actuator, please enter password: ")
+                if(password == "arduino"):
+                    firstTime = False
+                    set(int(cmd.split(" ")[1]))
+                else:
+                    print("Wrong password")
+            elif (cmd.split(" ")[0] == "SET" and not firstTime):
+                set(int(cmd.split(" ")[1]))
             elif (cmd.split(" ")[0] == "SETALARM"):
                 setAlarm(int(cmd.split(" ")[1]))
             elif (cmd.split(" ")[0] == "LOGSTART"):
@@ -126,7 +145,4 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 print("INVALID COMMAND\n")
         except:
             print("INVALID COMMAND\n")
-
-    s.send(b'GET /sensors HTTP/1.1\r\n\r\n')
-    reply = s.recv(1024)
-    print(reply)
+            
